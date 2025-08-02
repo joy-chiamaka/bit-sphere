@@ -94,3 +94,99 @@
     last-reset: uint, ;; Counter reset timestamp
   }
 )
+
+;; Batch Processing Optimization
+;; Performance tuning for high-throughput operations
+(define-map UserBatches
+  principal
+  {
+    message-counter: uint, ;; Total messages processed
+    last-batch-timestamp: uint, ;; Last batch execution time
+    batch-size: uint, ;; Current batch capacity
+    current-batch-items: uint, ;; Items in active batch
+    total-batches: uint, ;; Historical batch count
+  }
+)
+
+;; User Analytics and Security Monitoring
+;; Activity tracking for behavior analysis and threat detection
+(define-map UserActivity
+  principal
+  {
+    last-seen: uint, ;; Most recent platform interaction
+    login-count: uint, ;; Session initiation counter
+    total-actions: uint, ;; Lifetime action accumulator
+    last-action: uint, ;; Timestamp of most recent activity
+  }
+)
+
+;; Social Connection Registry
+;; Bidirectional relationship management with status tracking
+(define-map Friendships
+  {
+    user1: principal, ;; First participant in relationship
+    user2: principal, ;; Second participant in relationship
+  }
+  { status: uint } ;; Relationship operational state
+)
+
+;; Safety and Harassment Prevention
+;; User blocking system for community protection
+(define-map BlockedUsers
+  {
+    blocker: principal, ;; User initiating block action
+    blocked: principal, ;; Target of block action
+  }
+  { timestamp: uint } ;; Block creation time
+)
+
+;; CORE LOGIC FUNCTIONS - Internal Processing Engine
+
+;; Advanced Rate Limiting with Intelligent Reset
+;; Prevents platform abuse while maintaining user experience quality
+(define-private (check-rate-limit
+    (user principal)
+    (action-type uint)
+  )
+  (let (
+      (rate-data (default-to {
+        daily-actions: u0,
+        friend-requests: u0,
+        status-updates: u0,
+        last-reset: stacks-block-height,
+      }
+        (map-get? RateLimits user)
+      ))
+      (current-time stacks-block-height)
+      (should-reset (> (- current-time (get last-reset rate-data)) RATE_LIMIT_RESET_PERIOD))
+    )
+    (if should-reset
+      (begin
+        (map-set RateLimits user {
+          daily-actions: u1,
+          friend-requests: (if (is-eq action-type u1)
+            u1
+            u0
+          ),
+          status-updates: (if (is-eq action-type u2)
+            u1
+            u0
+          ),
+          last-reset: current-time,
+        })
+        true
+      )
+      (and
+        (< (get daily-actions rate-data) MAX_ACTIONS_PER_DAY)
+        (or
+          (not (is-eq action-type u1))
+          (< (get friend-requests rate-data) MAX_FRIEND_REQUESTS_PER_DAY)
+        )
+        (or
+          (not (is-eq action-type u2))
+          (< (get status-updates rate-data) MAX_STATUS_UPDATES_PER_DAY)
+        )
+      )
+    )
+  )
+)
