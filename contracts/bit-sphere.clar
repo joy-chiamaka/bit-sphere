@@ -288,3 +288,107 @@
     false
   )
 )
+
+;; User Registry Verification
+;; Existence check for registered users
+(define-private (user-exists (user principal))
+  (is-some (map-get? Users user))
+)
+
+;; Safety System Integration
+;; Block relationship status verification
+(define-private (is-blocked
+    (blocker principal)
+    (blocked principal)
+  )
+  (is-some (map-get? BlockedUsers {
+    blocker: blocker,
+    blocked: blocked,
+  }))
+)
+
+;; Privacy Settings Retrieval
+;; Secure default privacy configuration
+(define-private (get-privacy-settings (user principal))
+  (default-to {
+    friend-list-visible: true,
+    status-visible: true,
+    metadata-visible: true,
+    last-seen-visible: true,
+    profile-image-visible: true,
+    encryption-enabled: false,
+    last-updated: stacks-block-height,
+  }
+    (map-get? UserPrivacy user)
+  )
+)
+
+;; PUBLIC API INTERFACE - External Function Endpoints
+
+;; Intelligent Batch Processing Optimization
+;; Machine learning-inspired performance tuning for transaction efficiency
+(define-public (optimize-batch-size (user principal))
+  (let (
+      (batch-data (unwrap-panic (map-get? UserBatches user)))
+      (current-time stacks-block-height)
+      (time-since-last-batch (- current-time (get last-batch-timestamp batch-data)))
+      (current-batch-size (get batch-size batch-data))
+      (items-in-current-batch (get current-batch-items batch-data))
+    )
+    (if (> time-since-last-batch BATCH_EXPIRY_PERIOD)
+      (begin
+        (map-set UserBatches user
+          (merge batch-data {
+            batch-size: (max-uint MIN_BATCH_SIZE (/ current-batch-size u2)),
+            current-batch-items: u0,
+            last-batch-timestamp: current-time,
+          })
+        )
+        (ok true)
+      )
+      (begin
+        (map-set UserBatches user
+          (merge batch-data { batch-size: (min-uint MAX_BATCH_SIZE
+            (if (>= items-in-current-batch (/ current-batch-size u2))
+              (* current-batch-size u2)
+              current-batch-size
+            )) }
+          ))
+        (ok true)
+      )
+    )
+  )
+)
+
+;; Advanced Privacy Management System
+;; Granular control over personal data visibility and encryption
+(define-public (update-advanced-privacy-settings
+    (friend-list-visible bool)
+    (status-visible bool)
+    (metadata-visible bool)
+    (last-seen-visible bool)
+    (profile-image-visible bool)
+    (encryption-enabled bool)
+  )
+  (let ((caller tx-sender))
+    (asserts! (check-active-user caller) ERR_DEACTIVATED)
+    (asserts! (check-rate-limit caller u2) ERR_RATE_LIMITED)
+    (map-set UserPrivacy caller {
+      friend-list-visible: friend-list-visible,
+      status-visible: status-visible,
+      metadata-visible: metadata-visible,
+      last-seen-visible: last-seen-visible,
+      profile-image-visible: profile-image-visible,
+      encryption-enabled: encryption-enabled,
+      last-updated: stacks-block-height,
+    })
+    (update-rate-limit caller u2)
+    (update-user-activity caller)
+    (print {
+      event: "privacy-updated",
+      user: caller,
+      timestamp: stacks-block-height,
+    })
+    (ok true)
+  )
+)
