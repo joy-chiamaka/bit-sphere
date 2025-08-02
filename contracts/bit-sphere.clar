@@ -392,3 +392,96 @@
     (ok true)
   )
 )
+
+;; Dynamic User Profile Management
+;; Flexible profile updating with optional field modification
+(define-public (update-user-profile
+    (name (optional (string-ascii 64)))
+    (metadata (optional (string-utf8 256)))
+    (encryption-key (optional (buff 32)))
+    (profile-image (optional (string-utf8 256)))
+  )
+  (let (
+      (caller tx-sender)
+      (user (unwrap-panic (map-get? Users caller)))
+    )
+    (asserts! (check-active-user caller) ERR_DEACTIVATED)
+    (asserts! (check-rate-limit caller u2) ERR_RATE_LIMITED)
+    (map-set Users caller
+      (merge user {
+        name: (default-to (get name user) name),
+        metadata: (if (is-some metadata)
+          metadata
+          (get metadata user)
+        ),
+        encryption-key: (if (is-some encryption-key)
+          encryption-key
+          (get encryption-key user)
+        ),
+        profile-image: (if (is-some profile-image)
+          profile-image
+          (get profile-image user)
+        ),
+      })
+    )
+    (update-rate-limit caller u2)
+    (update-user-activity caller)
+    (print {
+      event: "profile-updated",
+      user: caller,
+      timestamp: stacks-block-height,
+    })
+    (ok true)
+  )
+)
+
+;; Manual Batch Configuration
+;; Advanced user control over transaction batching behavior
+(define-public (set-batch-size (new-size uint))
+  (let (
+      (caller tx-sender)
+      (batch-data (unwrap-panic (map-get? UserBatches caller)))
+    )
+    (asserts! (check-active-user caller) ERR_DEACTIVATED)
+    (asserts! (and (>= new-size MIN_BATCH_SIZE) (<= new-size MAX_BATCH_SIZE))
+      ERR_INVALID_INPUT
+    )
+    (map-set UserBatches caller (merge batch-data { batch-size: new-size }))
+    (print {
+      event: "batch-size-updated",
+      user: caller,
+      new-size: new-size,
+      timestamp: stacks-block-height,
+    })
+    (ok true)
+  )
+)
+
+;; Session Management and Security Tracking
+;; User authentication logging for security analytics
+(define-public (record-login)
+  (let (
+      (caller tx-sender)
+      (activity (default-to {
+        last-seen: stacks-block-height,
+        login-count: u0,
+        total-actions: u0,
+        last-action: stacks-block-height,
+      }
+        (map-get? UserActivity caller)
+      ))
+    )
+    (map-set UserActivity caller
+      (merge activity {
+        last-seen: stacks-block-height,
+        login-count: (+ (get login-count activity) u1),
+      })
+    )
+    (print {
+      event: "user-login",
+      user: caller,
+      timestamp: stacks-block-height,
+    })
+    (ok true)
+  )
+)
